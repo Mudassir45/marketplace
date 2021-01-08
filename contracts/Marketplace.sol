@@ -2,9 +2,9 @@
 
 pragma solidity =0.7.0;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Marketplace is Ownable {
+contract Marketplace {
     enum Stage { Open, Closed }
     enum OfferStatus { Pending, Accepted, Rejected }
     
@@ -38,7 +38,7 @@ contract Marketplace is Ownable {
         require(products[_productId].orderOwner == msg.sender, "Only order owner can access");
         _;
     }
-    
+
     uint256 internal productNum;
     uint256 internal offNum;
     
@@ -51,7 +51,9 @@ contract Marketplace is Ownable {
     event ProductRemoved(uint256 productId);
     event OfferAdded(uint256 offerId);
     event TradeSettled(uint256 productId, uint256 offerId);
-    event OfferDecided(uint24 productId, uint256 offerId);
+    event OfferDecided(uint256 productId, uint256 offerId);
+    event OfferPaymentSentInEther(uint256 productId, uint256 offerId, uint256 amount, address beneficiary, address offerMaker);
+    event OfferPaymentSentInToken(uint256 productId, uint256 offerId, uint256 amount, address beneficiary, address offerMaker);
 
     constructor() {
         productNum = 1;
@@ -70,13 +72,13 @@ contract Marketplace is Ownable {
         return products[_productId].offerIds;
     }
 
-    function getOffer(uint256 _productId) external view returns(uint256 offerId, address offerMaker, uint256 quantity, Stage stage, uint256 amount) {
+    function getOffer(uint256 _productId) external view returns(uint256 offerId, address offerMaker, uint256 quantity, OfferStatus stage, uint256 amount) {
         return (
             offers[_productId].productId, 
             offers[_productId].offerMaker, 
             offers[_productId].quantity, 
             offers[_productId].offStage,
-            offers[_productId].amount
+            offers[_productId].price
         );
     }
 
@@ -110,10 +112,10 @@ contract Marketplace is Ownable {
     function decideOffer(uint256 _productId, uint256 _acceptedOfferId) external onlySeller(_productId) returns(bool status) {
         _closeProduct(_productId);
         for (uint k = 0; k <= products[_productId].offerIds.length; k++) {
-            if(products[_productId].offerIds == _acceptedOfferId) {
+            if(products[_productId].offerIds[k] == _acceptedOfferId) {
                 continue;
             }
-            products[_productsId].offerIds = OfferStatus.Rejected;
+            offers[products[_productId].offerIds[k]].offStage = OfferStatus.Rejected;
         }
         products[_productId].acceptedOfferId = _acceptedOfferId;
         products[_productId].isDecided = true;
@@ -122,7 +124,7 @@ contract Marketplace is Ownable {
         return true;
     }
     
-    function submitOffer(uint256 _productId, uint256 _amount, uint256 _quantity) external returns(uint256 offerId) {
+    function submitOffer(uint256 _productId, uint256 _price, uint256 _quantity) external returns(uint256 offerId) {
         require(block.timestamp > products[_productId].deadline, "Sorry time is completed to submit offer");
         require(Stage.Open == products[_productId].reqStage, "Product is not open now");
         require(products[_productId].offerIds.length <= 50, "Limit of offers crossed");
@@ -130,7 +132,7 @@ contract Marketplace is Ownable {
 
         Offer memory offer;
         offer.productId = _productId;
-        offer.amount = _amount;
+        offer.price = _price;
         offer.offerMaker = msg.sender;
         offer.quantity = _quantity;
         offer.Id = offNum;
@@ -143,7 +145,7 @@ contract Marketplace is Ownable {
         return offer.Id;
     }
 
-    function deleteProduct(uint256 _productId) external returns() {
+    function deleteProduct(uint256 _productId) external {
         for (uint i = 0; i < products[_productId].offerIds.length; i++) {
             delete offers[products[_productId].offerIds[i]];
         }
@@ -151,16 +153,33 @@ contract Marketplace is Ownable {
         delete products[_productId];
     }
 
-    function payment(uint256 _productId) external {
+    function paymentInEther(uint256 _productId) external payable {
+        require(msg.value >= address(msg.sender).balance, "You don't have sufficiet funds");
+        require(offers[products[_productId].acceptedOfferId].offerMaker == msg.sender, "Only authorize buyer can access");
+        uint256 offerID = products[_productId].acceptedOfferId;
+        address _beneficiary = products[_productId].orderOwner;
+        if(products[_productId].isDecided == true && products[_productId].isPaid == false) {
+        payable(_beneficiary).transfer(msg.value);
+        }
+        products[_productId].isPaid = true;
+
+        emit OfferPaymentSentInEther(_productId, offerID, msg.value, _beneficiary, offers[offerID].offerMaker);
+    }
+
+    function paymentInToken(uint256 _productId, uint256 _amount, address token) external returns(bool){
         uint256 offerId = products[_productId].acceptedOfferId;
         bool result = false;
         if(products[_productId].isDecided == true && products[_productId].isPaid == false) {
-            result = transferFrom(products[_productId].orderOwner, offers[offerId].offerMaker, offers[offerId].price);
+            IERC20(token).allowance(msg.sender, products[_productId].orderOwner);
+            require(IERC20(token).transferFrom(msg.sender, products[_productId].orderOwner, _amount), "Transfer failed");
+            result = IERC20(token).transferFrom(products[_productId].orderOwner, offers[offerId].offerMaker, offers[offerId].price);
         }
         if(result == true) {
             products[_productId].isPaid = true;
             return true;
         }
+
+        emit OfferPaymentSentInToken(_productId, offerId, _amount, products[_productId].orderOwner, offers[offerId].offerMaker);
         return false;
     }
 }
