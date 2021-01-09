@@ -46,12 +46,12 @@ contract Marketplace {
     mapping(uint256 => Offer) internal offers;
     mapping(address => Product) internal productsOwner;
     
-    event ProductAdded(uint256 productId, uint256 deadline);
+    event ProductAdded(uint256 productId, uint256 price, uint256 quantity, uint256 deadline, string productName, address orderOwner, Stage status, address token);
     event ProductClosed(uint256 productId);
     event ProductRemoved(uint256 productId);
-    event OfferAdded(uint256 offerId);
+    event OfferAdded(uint256 offerId, uint256 productId, uint256 price, uint256 quantity, address offerMaker);
     event TradeSettled(uint256 productId, uint256 offerId);
-    event OfferDecided(uint256 productId, uint256 offerId);
+    event OfferDecided(uint256 productId, uint256 offerId, address offerMaker);
     event OfferPaymentSentInEther(uint256 productId, uint256 offerId, uint256 amount, address beneficiary, address offerMaker);
     event OfferPaymentSentInToken(uint256 productId, uint256 offerId, uint256 amount, address beneficiary, address offerMaker);
 
@@ -62,10 +62,6 @@ contract Marketplace {
     
     function getProduct(uint256 _productId) external view returns(string memory name, Stage stage, address productOwner, uint256 quantity, uint256 deadline) {
         return (products[_productId].name, products[_productId].reqStage, products[_productId].orderOwner, products[_productId].quantity, products[_productId].deadline);
-    }
-
-    function getOrders(address _orderOwner) external view returns(uint256) {
-
     }
     
     function getProductOfferIds(uint256 _productId) external view returns(uint256[] memory offerIds) {
@@ -100,7 +96,7 @@ contract Marketplace {
         products[product.Id] = product;
         productsOwner[msg.sender] = product;
 
-        emit ProductAdded(product.Id, product.deadline);
+        emit ProductAdded(product.Id, product.price, product.quantity, product.deadline, product.name, product.orderOwner, product.reqStage, product.tokenAddress);
         return product.Id;
     }
 
@@ -124,7 +120,7 @@ contract Marketplace {
         products[_productId].acceptedOfferId = _acceptedOfferId;
         products[_productId].isDecided = true;
 
-        emit OfferDecided(_productId, _acceptedOfferId);
+        emit OfferDecided(_productId, _acceptedOfferId, offers[_acceptedOfferId].offerMaker);
         return true;
     }
     
@@ -146,7 +142,7 @@ contract Marketplace {
         offers[offer.Id] = offer;
         products[offer.productId].offerIds.push(offer.Id);
         
-        emit OfferAdded(offer.Id);
+        emit OfferAdded(offer.Id, offer.productId, offer.price, offer.quantity, offer.offerMaker);
         return offer.Id;
     }
 
@@ -156,6 +152,7 @@ contract Marketplace {
         }
 
         delete products[_productId];
+        emit ProductRemoved(_productId);
     }
 
     function paymentInEther(uint256 _productId) external payable {
@@ -169,6 +166,7 @@ contract Marketplace {
         
         products[_productId].isPaid = true;
         emit OfferPaymentSentInEther(_productId, offerID, msg.value, _beneficiary, offers[offerID].offerMaker);
+        emit TradeSettled(_productId, offerID);
     }
 
     function paymentInToken(uint256 _productId, uint256 _amount, address token) external returns(bool) {
@@ -181,5 +179,6 @@ contract Marketplace {
         
         products[_productId].isPaid = true;
         emit OfferPaymentSentInToken(_productId, offerId, _amount, products[_productId].orderOwner, offers[offerId].offerMaker);
+        emit TradeSettled(_productId, offerId);
     }
 }
