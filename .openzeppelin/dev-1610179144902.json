@@ -8,6 +8,13 @@
         "kind": "NonProxy",
         "bytecodeHash": "a912bb6d8e077248a0c6b1f094dbc7fdab57c68b666760b3df16ffc47c82f4bc"
       }
+    ],
+    "marketplace/MyToken": [
+      {
+        "address": "0xC89Ce4735882C9F0f0FE26686c53074E09B0D550",
+        "kind": "NonProxy",
+        "bytecodeHash": "6e56d79724f0c9c3e1d460d98fb769caaeb3cda0485fa080ed8b0076ad9ebdd9"
+      }
     ]
   },
   "manifestVersion": "2.2"
