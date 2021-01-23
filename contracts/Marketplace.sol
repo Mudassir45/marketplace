@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity =0.7.0;
+pragma solidity ^0.6.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -55,7 +55,7 @@ contract Marketplace {
     event OfferPaymentSentInEther(uint256 productId, uint256 offerId, uint256 amount, address beneficiary, address offerMaker);
     event OfferPaymentSentInToken(uint256 productId, uint256 offerId, uint256 amount, address beneficiary, address offerMaker);
 
-    constructor() {
+    constructor() public {
         productNum = 1;
         offNum = 1;
     }
